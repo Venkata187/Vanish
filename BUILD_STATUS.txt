@@ -1,0 +1,9 @@
+APK BUILD STATUS
+================
+An APK was NOT compiled in this environment.
+
+Reason: the current runtime has Java but no Android SDK (no sdkmanager, android.jar, aapt2, or Android build-tools) and no Gradle installation. Network DNS is disabled in the build container, so the Android SDK / Gradle distributions cannot be installed here.
+
+The archive contains the Android Studio project and a GitHub Actions workflow (.github/workflows/build-apk.yml) configured to build app/build/outputs/apk/debug/app-debug.apk on a GitHub-hosted runner.
+
+The included HTML/JavaScript mobile port has been syntax-checked with Node.js, and the Android manifest was parsed successfully. This is not equivalent to an Android compile or on-device runtime test.
