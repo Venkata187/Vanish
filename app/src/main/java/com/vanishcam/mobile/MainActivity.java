@@ -8,6 +8,8 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
+import android.net.Uri;
+import android.util.Log;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -17,6 +19,7 @@ import android.app.Activity;
 import androidx.webkit.WebViewAssetLoader;
 
 public class MainActivity extends Activity {
+    private static final String TAG = "VanishCam";
     private static final int CAMERA_PERMISSION_REQUEST = 41;
     private WebView webView;
     private boolean pageLoaded = false;
@@ -66,24 +69,45 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
+                // WebView has its own permission gate in addition to Android's runtime
+                // CAMERA permission. Compare the parsed origin instead of the complete
+                // Uri string (which can vary by WebView version, e.g. trailing slash).
                 runOnUiThread(() -> {
-                    if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                            && "https://appassets.androidplatform.net".equals(request.getOrigin().toString())) {
-                        String[] requested = request.getResources();
-                        boolean cameraRequested = false;
-                        for (String resource : requested) {
-                            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
-                                cameraRequested = true;
-                            }
+                    Uri origin = request.getOrigin();
+                    boolean trustedOrigin = origin != null
+                            && "https".equalsIgnoreCase(origin.getScheme())
+                            && "appassets.androidplatform.net".equalsIgnoreCase(origin.getHost());
+                    boolean androidCameraGranted = checkSelfPermission(Manifest.permission.CAMERA)
+                            == PackageManager.PERMISSION_GRANTED;
+                    boolean cameraRequested = false;
+                    for (String resource : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                            cameraRequested = true;
                         }
-                        if (cameraRequested) request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-                        else request.deny();
+                    }
+
+                    Log.i(TAG, "WebView permission request: origin=" + origin
+                            + ", trusted=" + trustedOrigin
+                            + ", androidCameraGranted=" + androidCameraGranted
+                            + ", cameraRequested=" + cameraRequested);
+
+                    if (trustedOrigin && androidCameraGranted && cameraRequested) {
+                        request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
                     } else {
                         request.deny();
-                        Toast.makeText(MainActivity.this, "Allow camera permission to use VanishCam.",
-                                Toast.LENGTH_LONG).show();
+                        String reason = !androidCameraGranted
+                                ? "Android camera permission is not granted."
+                                : (!trustedOrigin ? "Camera request came from an untrusted page." :
+                                   "The page did not request video capture.");
+                        Toast.makeText(MainActivity.this, reason, Toast.LENGTH_LONG).show();
+                        Log.w(TAG, "Denied WebView camera permission: " + reason);
                     }
                 });
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                Log.w(TAG, "WebView camera permission request was canceled: " + request.getOrigin());
             }
         });
 
